@@ -1,0 +1,722 @@
+/* End of Journal
+   The journal lies on a table the colour of its own plaid cover, under a lamp.
+   Everything else is the lilac of its ruled lines. The pages are the only light thing. */
+
+:root {
+  --table: #2b1629;        /* the cover's darkest plum, dimmed */
+  --table-lamp: #3d2139;   /* where the lamp falls */
+  --table-raised: #38203a; /* drawers that slide over the table */
+  --rule: #ecdfee;         /* the ruled lines, as text on the table */
+  --rule-dim: #b79db4;
+  --rule-faint: rgba(236, 223, 238, .22);
+  --plaid: #c4467a;        /* the cover's magenta */
+  --plaid-light: #e58db3;
+  --label: #ecd3e3;        /* the cover's blank name label */
+  --label-ink: #5e1f49;
+  --paper: #fbf3ef;        /* the notebook's paper */
+  --paper-rule: #e3d5ea;
+  --ink: #3a2a35;
+  --ink-dim: #8a7584;
+
+  --serif: "Alegreya", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --pw: 400px;
+  --ph: 563px;
+  --bar-h: 60px;
+  --rail-h: 92px;
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: var(--bar-h) 1fr var(--rail-h);
+  font: 400 18px/1.5 var(--serif);
+  color: var(--rule);
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 46%, var(--table-lamp), transparent 72%),
+    var(--table);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--plaid-light);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Top bar */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 max(20px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left));
+  position: relative;
+  z-index: 3;
+}
+
+.name {
+  font-style: italic;
+  font-size: 21px;
+  color: var(--rule);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: opacity .4s;
+}
+
+.at-start .name { opacity: 0; pointer-events: none; }
+
+.tools { display: flex; gap: 22px; }
+
+.tools button {
+  font-size: 16px;
+  color: var(--rule-dim);
+  padding: 6px 0;
+  position: relative;
+  white-space: nowrap;
+}
+
+.tools button:hover { color: var(--rule); }
+
+.tools button[aria-pressed="true"] { color: var(--rule); }
+
+.tools button[aria-pressed="true"]::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 2px;
+  height: 2px;
+  background: var(--plaid-light);
+}
+
+/* The desk: the book, and the typed text when it is docked beside it */
+
+.desk {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  min-height: 0;
+  position: relative;
+}
+
+.stage {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.book {
+  position: relative;
+  width: calc(var(--pw) * 2);
+  height: var(--ph);
+  cursor: pointer;
+}
+
+/* The turning leaf lives in its own layer over the book, which holds the perspective. */
+.turner {
+  position: absolute;
+  inset: 0;
+  perspective: calc(var(--pw) * 5);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* One page at a time: the leaf is cut off at the page's sides, so once it passes
+   the binding it is gone instead of lying in the margin beside the page. It may
+   still rise above and below the page as it lifts. */
+.single .turner { clip-path: inset(-100vh 0 -100vh 0); }
+
+.single .book { width: var(--pw); }
+
+.magnifying .book { cursor: none; }
+
+.slot, .leaf, .cast {
+  position: absolute;
+  top: 0;
+  width: var(--pw);
+  height: var(--ph);
+}
+
+.slot.l, .cast.l { left: 0; }
+.slot.r, .cast.r, .leaf { left: var(--pw); }
+.single .slot.r, .single .cast.r, .single .leaf { left: 0; }
+.single .slot.l, .single .cast.l { display: none; }
+
+.slot img, .face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The low-resolution stand-in, shown behind a page until the sharp one arrives */
+.slot, .face {
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* One shadow for both pages together. A shadow per page would let the right page's
+   shadow fall across the left page at the binding, and that strip would change
+   brightness whenever the turning leaf covered it. */
+.pages {
+  position: absolute;
+  inset: 0;
+  filter: drop-shadow(0 14px 22px rgba(18, 5, 16, .5)) drop-shadow(0 2px 3px rgba(18, 5, 16, .35));
+}
+
+.slot img:not([src]), .face img:not([src]) { visibility: hidden; }
+
+.cast {
+  pointer-events: none;
+  opacity: 0;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.cast.l { background: linear-gradient(to left, rgba(24, 8, 20, .55), rgba(24, 8, 20, 0) 60%); }
+.cast.r { background: linear-gradient(to right, rgba(24, 8, 20, .55), rgba(24, 8, 20, 0) 60%); }
+
+.leaf {
+  transform-origin: 0 50%;
+  transform-style: preserve-3d;
+  will-change: transform;
+  pointer-events: none;
+}
+
+.leaf[hidden] { display: none; }
+
+.face {
+  position: absolute;
+  inset: 0;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.face.back { transform: rotateY(180deg); }
+
+.face.blank::before {
+  content: "";
+  position: absolute;
+  inset: 1.5% 0 1.5% 0;
+  background: var(--paper);
+  border-radius: 0 2.5% 2.5% 0;
+}
+
+.face.back.blank::before { border-radius: 2.5% 0 0 2.5%; }
+
+.shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--lift, 0);
+}
+
+.front .shade { background: linear-gradient(to right, rgba(40, 14, 32, .5), rgba(40, 14, 32, .12) 45%, rgba(255, 245, 240, .06)); }
+.back .shade { background: linear-gradient(to left, rgba(40, 14, 32, .5), rgba(40, 14, 32, .12) 45%, rgba(255, 245, 240, .06)); }
+
+/* Folios: what each page is, under it */
+
+.folio {
+  position: absolute;
+  top: calc(100% + 12px);
+  width: var(--pw);
+  margin: 0;
+  text-align: center;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--rule-dim);
+  transition: opacity .3s;
+}
+
+.folio.l { left: 0; }
+.folio.r { left: var(--pw); }
+.single .folio.l { display: none; }
+.single .folio.r { left: 0; }
+.at-start .folio, .at-end .folio, .turning .folio { opacity: 0; }
+
+/* The opening: the title sits where the first page will fall */
+
+.opening, .closing {
+  position: absolute;
+  top: 0;
+  width: var(--pw);
+  height: var(--ph);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  text-align: right;
+  padding: 0 clamp(20px, 9%, 64px) 4% 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .5s, visibility 0s .5s;
+}
+
+.opening { left: 0; }
+
+.closing {
+  left: var(--pw);
+  align-items: flex-start;
+  text-align: left;
+  padding: 0 0 4% clamp(20px, 9%, 64px);
+}
+
+.at-start .opening, .at-end .closing {
+  opacity: var(--fade, 1);
+  visibility: visible;
+  transition: opacity .5s, visibility 0s;
+}
+
+.opening h1 {
+  margin: 0 0 14px;
+  font-weight: 400;
+  font-size: clamp(40px, calc(var(--pw) * .15), 76px);
+  line-height: 1;
+  letter-spacing: -.01em;
+  color: var(--rule);
+}
+
+.opening .sub {
+  margin: 0 0 32px;
+  max-width: 17em;
+  text-wrap: balance;
+  font-size: 19px;
+  line-height: 1.45;
+  font-style: italic;
+  color: var(--rule-dim);
+}
+
+.opening .hint {
+  margin: 22px 0 0;
+  max-width: 19em;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--rule-dim);
+}
+
+.closing p {
+  margin: 0 0 24px;
+  font-size: 21px;
+  font-style: italic;
+  color: var(--rule);
+}
+
+/* Buttons that look like the blank name label on the cover */
+.label-button {
+  font-size: 18px;
+  color: var(--label-ink);
+  background: var(--label);
+  padding: 9px 22px 10px;
+  border: 1.5px solid var(--label-ink);
+  border-radius: 1px;
+  box-shadow: inset 0 0 0 3px var(--label);
+  outline-color: var(--plaid-light);
+  transition: background-color .2s;
+}
+
+.label-button:hover { background: #f3e1ec; }
+
+/* Phones: one page at a time, the opening text below the cover */
+
+.single .opening, .single .closing {
+  top: calc(100% + 18px);
+  left: 50%;
+  translate: -50% 0;
+  width: min(92vw, 420px);
+  height: auto;
+  align-items: center;
+  text-align: center;
+  padding: 0;
+}
+
+.single .opening h1 { font-size: 40px; margin-bottom: 6px; }
+.single .opening .sub { margin: 0 auto 18px; font-size: 17px; }
+.single .opening .hint { display: none; }
+
+/* The magnifier */
+
+.loupe {
+  position: fixed;
+  left: 0; top: 0;
+  width: 260px;
+  height: 260px;
+  margin: -130px 0 0 -130px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10;
+  background-color: var(--table);
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 1.5px rgba(236, 223, 238, .55), 0 18px 40px rgba(12, 3, 10, .6);
+}
+
+/* Bottom rail: where you are, and the whole journal as one ruled line */
+
+.rail {
+  position: relative;
+  z-index: 3;
+  padding: 0 max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left));
+  transition: opacity .5s;
+}
+
+.at-start .rail { opacity: 0; pointer-events: none; }
+
+.where {
+  margin: 0 0 2px;
+  text-align: center;
+  font-size: 16px;
+  color: var(--rule);
+  min-height: 24px;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.step {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--rule-dim);
+  border-radius: 50%;
+}
+
+.step:hover { color: var(--rule); background: var(--rule-faint); }
+.step:disabled { opacity: .3; cursor: default; background: none; }
+
+.step svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.scrub {
+  position: relative;
+  flex: 1;
+  height: 40px;
+}
+
+.ticks {
+  position: absolute;
+  inset: 0 3px;
+  pointer-events: none;
+}
+
+.ticks i {
+  position: absolute;
+  top: 13px;
+  width: 1px;
+  height: 7px;
+  background: var(--rule-dim);
+  opacity: .7;
+}
+
+.ticks i.arrive { top: 11px; height: 11px; opacity: 1; }
+
+.scrub input {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 40px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.scrub input::-webkit-slider-runnable-track { height: 1px; background: var(--rule-dim); }
+.scrub input::-moz-range-track { height: 1px; background: var(--rule-dim); }
+
+.scrub input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 6px;
+  height: 22px;
+  margin-top: -11px;
+  border-radius: 1px;
+  background: var(--plaid-light);
+}
+
+.scrub input::-moz-range-thumb {
+  width: 6px;
+  height: 22px;
+  border: 0;
+  border-radius: 1px;
+  background: var(--plaid-light);
+}
+
+.scrub input:focus-visible { outline-offset: 0; }
+
+.peek {
+  position: absolute;
+  bottom: 40px;
+  width: 104px;
+  margin-left: -52px;
+  padding: 6px 6px 4px;
+  background: var(--table-raised);
+  border-radius: 3px;
+  box-shadow: 0 10px 24px rgba(12, 3, 10, .5);
+  pointer-events: none;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--rule);
+}
+
+.peek img { display: block; width: 92px; height: auto; aspect-ratio: 1705 / 2400; margin-bottom: 4px; }
+
+/* Typed text */
+
+.text { min-height: 0; }
+
+/* Just the sheet of paper and the typing on it: the "Typed text" button in the top
+   bar opens and closes it. */
+.sheet {
+  /* As tall as the tallest page needs (set by reader.js), never taller than the room. */
+  height: min(100%, var(--sheet-h, 100%));
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.close {
+  font-size: 16px;
+  color: var(--ink-dim);
+  padding: 4px 0;
+}
+
+.close:hover { color: var(--ink); }
+
+/* The typed copy: a manual typewriter on plain paper. Single spacing, paragraphs
+   indented five spaces, a blank line before each new day, headings underscored.
+   Every letter gets its own ink and alignment in reader.js (typewrite). */
+.sheet-body {
+  --type: #262024;          /* black ribbon */
+  --ribbon-red: #b02a24;    /* the red half of the ribbon, for best guesses */
+  flex: 1;
+  overflow-y: auto;
+  padding: 22px 20px 32px;
+  font-family: "Special Elite", "Courier New", Courier, monospace;
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--type);
+  text-shadow: 0 0 .6px rgba(38, 32, 36, .35);
+}
+
+.sheet-body h3 {
+  width: fit-content; /* as wide as its words, so the underscore stops where they do */
+  margin: 1.6em 0 1.6em;
+  font: inherit;
+  border-bottom: 1px solid rgba(38, 32, 36, .75);
+  line-height: 1.3;
+}
+
+.sheet-body h3:first-child { margin-top: 0; }
+
+.sheet-body p { margin: 0; max-width: 40em; text-indent: 5ch; hyphens: manual; }
+.sheet-body p.date { margin-top: 1.6em; text-indent: 0; }
+.sheet-body h3 + p.date { margin-top: 0; }
+.sheet-body p.empty { text-indent: 0; opacity: .6; }
+.sheet-body .unsure { color: var(--ribbon-red); }
+.sheet-body s { text-decoration: none; }
+
+/* Line for line with the handwriting. Indented lines are where Adam indented; a
+   line too long for the sheet wraps with its continuation set in. */
+.sheet-body p.ln { margin: 0; padding-left: 2ch; text-indent: -2ch; max-width: none; }
+.sheet-body p.ln.in { text-indent: 3ch; }
+.typed.measuring .ln { width: max-content; white-space: nowrap; } /* for an instant, to measure */
+
+.typed { font-kerning: none; } /* typed letters don't kern; also keeps measuring exact */
+.typed .w { white-space: nowrap; }
+
+.typed .k {
+  position: relative;
+  display: inline-block;
+  text-indent: 0; /* each letter is its own little block; don't indent it like a paragraph */
+  opacity: var(--i, 1);
+  transform: translate(var(--x, 0), var(--y, 0)) rotate(var(--r, 0));
+}
+
+/* A key struck twice, slightly apart */
+.typed .k.ghost { text-shadow: .45px .1px 0 rgba(38, 32, 36, .45), 0 0 .6px rgba(38, 32, 36, .35); }
+
+/* Words Adam crossed out are x'd out, as a typist would */
+.typed s .k::after {
+  content: "x";
+  position: absolute;
+  inset: 0;
+  text-align: center;
+  transform: translate(var(--sx, 0), var(--sy, 0));
+}
+
+/* Wide screens: the typed copy sits beside the journal. */
+/* Wide enough for most of Adam's lines (about 50 characters) at a readable size. */
+body:not(.typing-full) .text:not([hidden]) {
+  width: clamp(420px, 38vw, 580px);
+  padding: 6px 20px 10px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* the sheet sits level with the middle of the book */
+}
+body:not(.typing-full) .sheet { border-radius: 3px; box-shadow: 0 14px 30px rgba(18, 5, 16, .45); }
+
+/* Where the typed copy and the journal don't fit side by side, the typed sheet takes
+   the journal's place on the table, with nothing on it but the text. */
+.typing-full .text {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 6px max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+}
+
+.typing-full .sheet {
+  width: 100%;
+  max-width: 46rem;
+  border-radius: 3px;
+  box-shadow: 0 14px 30px rgba(18, 5, 16, .45);
+}
+
+.typing-full .sheet-body { padding: 22px clamp(14px, 5vw, 48px) 32px; touch-action: pan-y pinch-zoom; }
+
+/* Phones: the sheet runs edge to edge, to give Adam's lines every pixel of width. */
+@media (max-width: 520px) {
+  .typing-full .text { padding: 0; }
+  .typing-full .sheet { border-radius: 0; box-shadow: none; }
+  .typing-full .sheet-body { padding: 18px 12px 28px; }
+}
+.sheet-body:focus { outline: none; } /* focused only so the keyboard can scroll it */
+.sheet-body { cursor: pointer; } /* a click turns the page, as on the journal */
+.typing-full .book { visibility: hidden; }
+.typing-full #btn-magnify { display: none; }
+.typing-full.at-start .rail { opacity: 1; pointer-events: auto; }
+
+/* Contents */
+
+.contents {
+  margin: 0 auto 0 0;
+  width: min(440px, 94vw);
+  height: 100%;
+  max-height: 100%;
+  padding: 0;
+  border: 0;
+  color: var(--rule);
+  background: var(--table-raised);
+  box-shadow: 18px 0 40px rgba(12, 3, 10, .5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.contents::backdrop { background: rgba(20, 6, 18, .55); }
+
+.contents-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 18px 26px 10px;
+  background: var(--table-raised);
+}
+
+.contents-head h2 { margin: 0; font-size: 24px; font-weight: 400; }
+.contents .close { color: var(--rule-dim); }
+.contents .close:hover { color: var(--rule); }
+
+.entries {
+  list-style: none;
+  margin: 0;
+  padding: 0 14px 40px;
+}
+
+.entries .place {
+  margin: 22px 12px 4px;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--rule-dim);
+}
+
+.entries a {
+  display: grid;
+  grid-template-columns: 4.2em 1fr auto;
+  gap: 2px 14px;
+  align-items: baseline;
+  padding: 7px 12px;
+  border-radius: 3px;
+  color: var(--rule);
+  text-decoration: none;
+}
+
+.entries a:hover { background: var(--rule-faint); }
+.entries a[aria-current="true"] { background: rgba(229, 141, 179, .16); }
+
+.entries .d { font-weight: 500; white-space: nowrap; }
+
+.entries .w {
+  font-size: 16px;
+  color: var(--rule-dim);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.entries .n { font-size: 15px; color: var(--rule-dim); font-variant-numeric: oldstyle-nums; }
+
+.noscript { text-align: center; color: var(--rule); }
+
+/* Short screens: tighter chrome */
+
+@media (max-height: 560px) {
+  :root { --bar-h: 46px; --rail-h: 64px; }
+  .where { display: none; }
+  .folio { display: none; }
+}
+
+@media (max-width: 520px) {
+  .tools { gap: 16px; }
+  .name { font-size: 18px; }
+}
+
+/* No transitions at all. (A tiny duration instead of none would give every property a
+   transition, font size included, and the typed page would be measured mid-change.) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}

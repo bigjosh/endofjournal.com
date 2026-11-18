@@ -1,0 +1,20 @@
+{
+  "title": "End of Journal",
+  "subtitle": "Adam's journal from India, begun in October 1995",
+  "route": [
+    {"place": "Delhi", "page": 1},
+    {"place": "Agra", "page": 3},
+    {"place": "Fatehpur Sikri", "page": 5},
+    {"place": "Pushkar", "page": 8},
+    {"place": "Jaisalmer", "page": 17},
+    {"place": "Udaipur", "page": 24},
+    {"place": "Bombay", "page": 30},
+    {"place": "Goa", "page": 31},
+    {"place": "Mangalore", "page": 33},
+    {"place": "Bekal", "page": 34},
+    {"place": "Kovalam", "page": 40},
+    {"place": "Quilon", "page": 44},
+    {"place": "The backwaters", "page": 46},
+    {"place": "Kodaikanal", "page": 49}
+  ]
+}

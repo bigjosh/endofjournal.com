@@ -1,0 +1,5 @@
+# Raw scans are about 100 MB each; keep them on disk and backed up, not in git.
+scans/
+# Regenerated from scans/ by tools/process_scans.py.
+processed/
+__pycache__/

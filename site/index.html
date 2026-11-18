@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>End of Journal</title>
+<meta name="description" content="Adam's handwritten journal from India, October to December 1995, page by page.">
+<meta name="theme-color" content="#2b1629">
+<meta property="og:title" content="End of Journal">
+<meta property="og:description" content="Adam's handwritten journal from India, October to December 1995, page by page.">
+<meta property="og:image" content="https://endofjournal.com/og.jpg">
+<meta property="og:url" content="https://endofjournal.com/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;1,400&family=Special+Elite&display=swap">
+<link rel="stylesheet" href="style.css?v=17">
+</head>
+<body class="at-start">
+<header class="bar">
+  <a class="name" href="#cover">End of Journal</a>
+  <nav class="tools" aria-label="Reading tools">
+    <button type="button" id="btn-contents" aria-haspopup="dialog">Contents</button>
+    <button type="button" id="btn-text" aria-pressed="false" aria-controls="text">Typed text</button>
+    <button type="button" id="btn-magnify" aria-pressed="false" hidden>Magnify</button>
+  </nav>
+</header>
+
+<main class="desk">
+  <section class="stage" id="stage" aria-label="The journal" aria-roledescription="book">
+    <div class="book" id="book">
+      <div class="pages">
+        <div class="slot l"><img alt="" draggable="false"></div>
+        <div class="slot r"><img alt="" draggable="false"></div>
+      </div>
+      <i class="cast l" aria-hidden="true"></i>
+      <i class="cast r" aria-hidden="true"></i>
+      <div class="turner" aria-hidden="true">
+        <div class="leaf" hidden>
+          <div class="face front"><img alt="" draggable="false" decoding="sync"><i class="shade"></i></div>
+          <div class="face back"><img alt="" draggable="false" decoding="sync"><i class="shade"></i></div>
+        </div>
+      </div>
+
+      <div class="opening">
+        <h1 id="title">End of Journal</h1>
+        <p class="sub" id="subtitle"></p>
+        <button type="button" class="label-button" id="btn-open">Open the journal</button>
+        <p class="hint">Click a page or use the arrow keys to turn it. You can also drag a page by its edge.</p>
+      </div>
+      <div class="closing">
+        <p>That is the last page.</p>
+        <button type="button" class="label-button" id="btn-restart">Back to the first page</button>
+      </div>
+
+      <p class="folio l" aria-hidden="true"></p>
+      <p class="folio r" aria-hidden="true"></p>
+    </div>
+    <div class="loupe" id="loupe" hidden aria-hidden="true"></div>
+  </section>
+
+  <aside class="text" id="text" aria-label="Typed text" hidden>
+    <div class="sheet">
+      <div class="sheet-body" id="text-body" tabindex="-1"></div>
+    </div>
+  </aside>
+</main>
+
+<footer class="rail">
+  <p class="where" id="where" aria-live="polite"></p>
+  <div class="track">
+    <button type="button" class="step prev" id="btn-prev" aria-label="Previous page">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
+    </button>
+    <div class="scrub">
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Position in the journal">
+      <div class="peek" id="peek" hidden aria-hidden="true"><img alt=""><span></span></div>
+    </div>
+    <button type="button" class="step next" id="btn-next" aria-label="Next page">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg>
+    </button>
+  </div>
+</footer>
+
+<dialog class="contents" id="contents" aria-labelledby="contents-title">
+  <div class="contents-head">
+    <h2 id="contents-title">Contents</h2>
+    <button type="button" class="close" id="btn-contents-close">Close</button>
+  </div>
+  <ol class="entries" id="entries"></ol>
+</dialog>
+
+<div class="sr-only" id="sr-text"></div>
+<noscript><p class="noscript">This journal needs JavaScript to turn its pages.</p></noscript>
+<script src="reader.js?v=21" defer></script>
+</body>
+</html>
