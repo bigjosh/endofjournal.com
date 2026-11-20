@@ -933,7 +933,6 @@
       spreads.forEach((row, s) => row.forEach((pi, side) => {
         if (pi != null && (side === 1 || pages[pi].writing)) stops.push({ s, side });
       }));
-      if (J.subtitle) $("#subtitle").textContent = J.subtitle;
       btn.magnify.hidden = !fine.matches;
       buildEntries();
       const st = stage.getBoundingClientRect();

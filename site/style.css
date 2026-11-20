@@ -298,22 +298,12 @@ button {
 }
 
 .opening h1 {
-  margin: 0 0 14px;
+  margin: 0 0 32px;
   font-weight: 400;
   font-size: clamp(40px, calc(var(--pw) * .15), 76px);
   line-height: 1;
   letter-spacing: -.01em;
   color: var(--rule);
-}
-
-.opening .sub {
-  margin: 0 0 32px;
-  max-width: 17em;
-  text-wrap: balance;
-  font-size: 19px;
-  line-height: 1.45;
-  font-style: italic;
-  color: var(--rule-dim);
 }
 
 .opening .hint {
@@ -361,8 +351,7 @@ button {
 }
 
 .single .closing { left: 25%; }
-.single .opening h1 { font-size: 40px; margin-bottom: 6px; }
-.single .opening .sub { margin: 0 auto 18px; font-size: 17px; }
+.single .opening h1 { font-size: 40px; margin-bottom: 18px; }
 .single .opening .hint { display: none; }
 
 /* The magnifier */
@@ -721,8 +710,7 @@ body:not(.typing-full) .sheet { border-radius: 3px; box-shadow: 0 14px 30px rgba
     width: max(var(--pw), min(26rem, var(--half, 0px) - 16px));
   }
   body:not(.single) .opening { left: auto; right: var(--pw); }
-  .opening h1 { font-size: 36px; margin-bottom: 8px; }
-  .opening .sub { margin-bottom: 16px; font-size: 16px; }
+  .opening h1 { font-size: 36px; margin-bottom: 16px; }
   .opening .hint { display: none; }
   .closing p { margin-bottom: 16px; font-size: 18px; }
   .label-button { font-size: 16px; padding: 7px 18px 8px; }

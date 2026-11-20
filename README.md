@@ -18,7 +18,7 @@ A reader for Adam's handwritten journal from India, made from flatbed scans of e
    `python tools/build_site.py`
    It lists any page numbers that have not been scanned yet.
 
-`content/journal.json` holds the subtitle and the route (the page on which Adam
+`content/journal.json` holds the route (the page on which Adam
 reaches each place), which the contents and the bottom rail use.
 
 ## Looking at it
