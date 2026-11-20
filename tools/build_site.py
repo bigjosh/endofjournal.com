@@ -127,8 +127,8 @@ def main() -> int:
                 page["role"] = "cover" if i == 0 else "back-cover"
             elif i == 1 and side == "L":
                 page["role"] = "inside-cover"
-            elif i == len(entries) - 2 and side == "R" and entries[-1]["kind"] == "single" and t.get("role") == "inside-back-cover":
-                page["role"] = "inside-back-cover"
+            elif t.get("role") == "inside-back-cover":
+                page["role"] = "inside-back-cover"   # marked in the transcript
             if t.get("page_number") is not None and "role" not in page:
                 page["n"] = t["page_number"]
             if side == "L" and "role" not in page and last_recto is not None:

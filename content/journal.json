@@ -1,6 +1,6 @@
 {
   "title": "End of Journal",
-  "subtitle": "Adam's journal from India, begun in October 1995",
+  "subtitle": "Adam's journal from India, October 1995 to January 1996",
   "route": [
     {"place": "Delhi", "page": 1},
     {"place": "Agra", "page": 3},
@@ -15,6 +15,14 @@
     {"place": "Kovalam", "page": 40},
     {"place": "Quilon", "page": 44},
     {"place": "The backwaters", "page": 46},
-    {"place": "Kodaikanal", "page": 49}
+    {"place": "Cochin", "page": 47},
+    {"place": "Kodaikanal", "page": 49},
+    {"place": "Madurai", "page": 51},
+    {"place": "Mysore", "page": 54},
+    {"place": "Jog Falls", "page": 58},
+    {"place": "Gokarna", "page": 64},
+    {"place": "Anjuna, Goa", "page": 70},
+    {"place": "Hampi", "page": 88},
+    {"place": "Guntakal", "page": 97}
   ]
 }

@@ -136,6 +136,8 @@ button {
   width: calc(var(--pw) * 2);
   height: var(--ph);
   cursor: pointer;
+  /* --cam slides the book under the window one page at a time (reader.js). */
+  transform: translateX(calc(var(--cam, 0) * var(--pw)));
 }
 
 /* The turning leaf lives in its own layer over the book, which holds the perspective. */
@@ -147,12 +149,15 @@ button {
   z-index: 2;
 }
 
-/* One page at a time: the leaf is cut off at the page's sides, so once it passes
-   the binding it is gone instead of lying in the margin beside the page. It may
-   still rise above and below the page as it lifts. */
-.single .turner { clip-path: inset(-100vh 0 -100vh 0); }
-
-.single .book { width: var(--pw); }
+/* One page at a time: the whole open book is there, seen through a window one page
+   wide in the middle of the stage. The book slides under it to show the left or the
+   right page; anything outside the window, the other page or a leaf in mid-turn,
+   is hidden, so the margins beside the page stay dark. A lifting leaf may still
+   rise above and below. */
+.single .stage { clip-path: inset(-100vh calc(50% - var(--pw) / 2)); }
+/* The book is wider than the stage here, and a grid won't centre an item that
+   overflows it, so centre the binding on the stage by hand. */
+.single .book { justify-self: start; margin-left: calc(50% - var(--pw)); }
 
 .magnifying .book { cursor: none; }
 
@@ -165,8 +170,6 @@ button {
 
 .slot.l, .cast.l { left: 0; }
 .slot.r, .cast.r, .leaf { left: var(--pw); }
-.single .slot.r, .single .cast.r, .single .leaf { left: 0; }
-.single .slot.l, .single .cast.l { display: none; }
 
 .slot img, .face img {
   display: block;
@@ -255,8 +258,6 @@ button {
 
 .folio.l { left: 0; }
 .folio.r { left: var(--pw); }
-.single .folio.l { display: none; }
-.single .folio.r { left: 0; }
 .at-start .folio, .at-end .folio, .turning .folio { opacity: 0; }
 
 /* The opening: the title sits where the first page will fall */
@@ -343,9 +344,10 @@ button {
 
 /* Phones: one page at a time, the opening text below the cover */
 
+/* Below the page in the window: the cover is a right-hand page, the back cover a left. */
 .single .opening, .single .closing {
   top: calc(100% + 18px);
-  left: 50%;
+  left: 75%;
   translate: -50% 0;
   width: min(92vw, 420px);
   height: auto;
@@ -354,6 +356,7 @@ button {
   padding: 0;
 }
 
+.single .closing { left: 25%; }
 .single .opening h1 { font-size: 40px; margin-bottom: 6px; }
 .single .opening .sub { margin: 0 auto 18px; font-size: 17px; }
 .single .opening .hint { display: none; }

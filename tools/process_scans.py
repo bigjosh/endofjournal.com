@@ -53,6 +53,12 @@ EDGE_INSET_MM = 0.15    # pull the cut-out in slightly so no background fringes
 SHEET_BG = (96, 90, 90)
 
 
+# Spreads that were laid on the glass the other way round (the page upside down on
+# the left, a blank back-of-page on the right). Turned the right way here, rather
+# than scanned again. Page 97 is NOT one of these: Adam wrote it upside down.
+TURNED_AROUND = {"Scan10063", "Scan10067"}  # pages 62 and 66
+
+
 class ScanError(Exception):
     pass
 
@@ -256,7 +262,8 @@ def process(path: Path, out_dir: Path, page_height: int, front_cover: bool) -> d
     img = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if img is None:
         raise ScanError("could not be read (still being written?)")
-    upright = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+    turned = path.stem in TURNED_AROUND
+    upright = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE if turned else cv2.ROTATE_90_CLOCKWISE)
     del img
 
     M, mask, (cw, ch), info = analyse(upright, dpi, front_cover)
@@ -280,6 +287,15 @@ def process(path: Path, out_dir: Path, page_height: int, front_cover: bool) -> d
 
     rgba = np.dstack([cv2.cvtColor(colour, cv2.COLOR_BGR2RGB), alpha])
     del colour
+    pages = save_pages(rgba, path.stem, out_dir, page_height)
+    st = path.stat()
+    return {"scan": path.stem, **info, "pages": pages, "warnings": warnings,
+            "source": {"size": st.st_size, "mtime": int(st.st_mtime), "version": VERSION, "height": page_height}}
+
+
+def save_pages(rgba: np.ndarray, stem: str, out_dir: Path, page_height: int) -> list[dict]:
+    """Split a placed spread (RGBA, on the fixed canvas) into its two pages and save them."""
+    ch, cw = rgba.shape[:2]
     half = cw // 2
     sides = {"L": rgba[:, :half], "R": rgba[:, half:]}
     page_w = int(round(half * page_height / ch))
@@ -287,7 +303,7 @@ def process(path: Path, out_dir: Path, page_height: int, front_cover: bool) -> d
     (out_dir / "pages").mkdir(parents=True, exist_ok=True)
     for side, arr in sides.items():
         coverage = float((arr[:, :, 3] > 128).mean())
-        target = out_dir / "pages" / f"{path.stem}-{side}.webp"
+        target = out_dir / "pages" / f"{stem}-{side}.webp"
         if coverage < 0.2:  # the empty half of a closed-book scan
             target.unlink(missing_ok=True)
             continue
@@ -297,9 +313,86 @@ def process(path: Path, out_dir: Path, page_height: int, front_cover: bool) -> d
         im.save(target, "WEBP", quality=86, method=4)
         pages.append({"side": side, "file": f"pages/{target.name}", "width": page_w, "height": page_height,
                       "bytes": target.stat().st_size})
+    return pages
 
+
+FULL_COVER = "full cover.TIF"   # the whole outside of the notebook, opened flat
+BACK_COVER = "BackCover"        # the page made from it, which ends the journal
+
+
+def back_cover(path: Path, out_dir: Path, page_height: int) -> dict:
+    """The outside back cover, cut from the scan of the whole open cover.
+
+    That scan lies sideways like the others, with the back cover, the spine and the
+    front cover across it once upright. The back cover is cut down the middle of
+    the spine (as the front cover's own scan shows its half of the spine), freed
+    from the light background, straightened, and placed like a closed-book scan:
+    spine at the binding, on the left, so it reads as the last page.
+    """
+    dpi = scan_dpi(path)
+    img = cv2.imread(str(path), cv2.IMREAD_COLOR)
+    if img is None:
+        raise ScanError("could not be read (still being written?)")
+    up = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+    del img
+    h, w = up.shape[:2]
+    px_mm = dpi / 25.4
+
+    # The spine is the darkest band near the middle: the red-brown cloth.
+    light = cv2.cvtColor(up[h // 3: 2 * h // 3], cv2.COLOR_BGR2LAB)[..., 0].astype(np.float32).mean(axis=0)
+    win = int(25 * px_mm)
+    seg = cv2.blur(light[w // 2 - win: w // 2 + win].reshape(1, -1), (odd(1.5 * px_mm), 1)).ravel()
+    band = np.where(seg < seg.min() + 30)[0]
+    cut = w // 2 - win + int((band.min() + band.max()) // 2)
+    crop = up[:, :cut]
+
+    # Background: unsaturated grey reaching in from the scan's edges. (Grey inside
+    # the cover, such as the barcode label, is not connected to an edge.)
+    sat = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)[..., 1]
+    n, labels = cv2.connectedComponents((sat < 70).astype(np.uint8))
+    border = (set(np.unique(labels[0])) | set(np.unique(labels[-1])) | set(np.unique(labels[:, 0]))) - {0}
+    mask = np.where(np.isin(labels, list(border)), 0, 255).astype(np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, ellipse(1.0, px_mm))
+
+    # Straighten from the top and bottom edges.
+    slopes = edges(mask, int(crop.shape[1] * .15), int(crop.shape[1] * .85))[0]
+    angle = math.degrees(math.atan(float(np.median(slopes))))
+    R = cv2.getRotationMatrix2D((crop.shape[1] / 2, h / 2), angle, 1.0)
+    crop = cv2.warpAffine(crop, R, (crop.shape[1], h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+    mask = cv2.warpAffine(mask, R, (crop.shape[1], h), flags=cv2.INTER_NEAREST)
+    ys = np.where((mask > 128).any(axis=1))[0]
+    top, bottom = int(ys.min()), int(ys.max())
+
+    alpha = cv2.GaussianBlur(cv2.erode(mask, ellipse(2 * EDGE_INSET_MM, px_mm)), (0, 0), 2.0)
+    half_w, ch = int(round(PAGE_W_MM * px_mm)), int(round(PAGE_H_MM * px_mm))
+    canvas = np.zeros((ch, 2 * half_w, 4), np.uint8)
+    x0 = half_w - crop.shape[1]                     # spine edge at the binding
+    y0 = ch // 2 - (top + bottom) // 2              # cover centred top to bottom
+    sy0, sy1 = max(0, -y0), min(h, ch - y0)
+    sx0 = max(0, -x0)
+    canvas[y0 + sy0: y0 + sy1, x0 + sx0: half_w, :3] = cv2.cvtColor(crop[sy0:sy1, sx0:], cv2.COLOR_BGR2RGB)
+    canvas[y0 + sy0: y0 + sy1, x0 + sx0: half_w, 3] = alpha[sy0:sy1, sx0:]
+
+    # The glass cut off the outer edge, rounded corners and all. Give it back the
+    # real corners: the front cover's own, from its scan, mirrored.
+    front = out_dir / "pages" / "Scan10005-R.webp"
+    if front.exists():
+        fa = np.array(Image.open(front))[..., 3]
+        fys, fxs = np.where(fa > 128)
+        size = int(14 * fa.shape[0] / PAGE_H_MM)                       # 14 mm square holds the curve
+        scale = px_mm / (fa.shape[0] / PAGE_H_MM)
+        left = x0 + sx0
+        for fy, cy in ((fys.min(), y0 + top), (fys.max() - size + 1, y0 + bottom - int(size * scale) + 1)):
+            patch = fa[fy: fy + size, fxs.max() - size + 1: fxs.max() + 1][:, ::-1]   # mirrored to a left corner
+            patch = cv2.resize(patch, (int(size * scale), int(size * scale)), interpolation=cv2.INTER_LINEAR)
+            region = canvas[cy: cy + patch.shape[0], left: left + patch.shape[1], 3]
+            region[:] = (region.astype(np.float32) * patch[:region.shape[0], :region.shape[1]] / 255).astype(np.uint8)
+
+    pages = save_pages(canvas, BACK_COVER, out_dir, page_height)
     st = path.stat()
-    return {"scan": path.stem, **info, "pages": pages, "warnings": warnings,
+    return {"scan": BACK_COVER, "kind": "single", "skew_deg": round(angle, 3),
+            "book_mm": [round(crop.shape[1] / px_mm, 1), round((bottom - top) / px_mm, 1)],
+            "touches_frame": ["left"], "residual_skew_deg": 0.0, "pages": pages, "warnings": [],
             "source": {"size": st.st_size, "mtime": int(st.st_mtime), "version": VERSION, "height": page_height}}
 
 
@@ -333,7 +426,9 @@ def main() -> int:
     ap.add_argument("--only", action="append", default=[], help="process just this scan (name without extension)")
     args = ap.parse_args()
 
-    scans = sorted(p for p in args.src.iterdir() if p.suffix.lower() in (".tif", ".tiff"))
+    # Only the scanner's own numbered files are journal spreads; anything else in the
+    # folder (such as "full cover.TIF", scanned for the birthday card) is left alone.
+    scans = sorted(p for p in args.src.iterdir() if p.suffix.lower() in (".tif", ".tiff") and p.name.lower().startswith("scan"))
     if not scans:
         print(f"no .TIF scans in {args.src}")
         return 1
@@ -373,6 +468,24 @@ def main() -> int:
             notes += f"  (reaches scan edge: {', '.join(e['touches_frame'])})"
         print(f"{path.stem}: {e['kind']}, {len(e['pages'])} page(s), skew {e['skew_deg']:+.2f} -> {e['residual_skew_deg']:+.2f} deg, "
               f"{time.time() - t0:.1f}s{notes}")
+
+    # The outside back cover ends the journal, cut from the scan of the whole cover.
+    full = args.src / FULL_COVER
+    if full.exists():
+        old, st = previous.get(BACK_COVER), full.stat()
+        fresh = (old and old["source"] == {"size": st.st_size, "mtime": int(st.st_mtime), "version": VERSION, "height": args.height}
+                 and all((args.out / p["file"]).exists() for p in old["pages"]))
+        wanted = not args.only or BACK_COVER in args.only
+        if old and (not wanted or (fresh and not args.force)):
+            entries.append(old)
+        elif wanted:
+            try:
+                e = back_cover(full, args.out, args.height)
+                entries.append(e)
+                print(f"{BACK_COVER} (from {FULL_COVER}): skew {e['skew_deg']:+.2f} deg, {e['book_mm'][0]} x {e['book_mm'][1]} mm")
+            except ScanError as err:
+                failed += 1
+                print(f"{BACK_COVER}: FAILED - {err}")
 
     manifest = {"page_mm": [PAGE_W_MM, PAGE_H_MM], "page_px": [int(round(args.height * PAGE_W_MM / PAGE_H_MM)), args.height],
                 "spreads": entries}

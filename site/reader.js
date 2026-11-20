@@ -41,7 +41,7 @@
   const fine = matchMedia("(hover: hover) and (pointer: fine)");
   const LOUPE = 130, ZOOM = 2.4;
 
-  let J, pages, spreads, seq, spreadOf;
+  let J, pages, spreads, stops, spreadOf;
   let mode = "spread";
   let pos = 0;
   let pw = 0, ph = 0, imgH = 1200;
@@ -51,28 +51,33 @@
 
   /* ---------- the journal's structure ---------- */
 
-  const count = () => (mode === "spread" ? spreads.length : seq.length);
-  const view = (k = pos) => (mode === "spread" ? spreads[k] : [null, seq[k]]);
-  const anchor = (k = pos) => { const [l, r] = view(k); return r ?? l; };
+  // One page at a time ("single") is a window one page wide onto the open book. The
+  // whole spread is always there; the book slides to bring its left or right page
+  // into the window. stops[k] = { s: spread, side: 0 left | 1 right }: every page,
+  // in reading order, the left-hand ones with their show-through included.
+  const count = () => (mode === "spread" ? spreads.length : stops.length);
+  const spreadAt = (k = pos) => (mode === "spread" ? k : stops[k].s);
+  const view = (k = pos) => spreads[spreadAt(k)];
+  const anchor = (k = pos) => {
+    if (mode === "single") return spreads[stops[k].s][stops[k].side];
+    const [l, r] = view(k);
+    return r ?? l;
+  };
+  // Where the book sits, in page widths: 0 centres the spread; in the window, -0.5
+  // shows its right page and +0.5 its left.
+  const camOf = (k = pos) => (mode === "single" ? (stops[k].side ? -0.5 : 0.5) : 0);
   const isCover = (pi) => pi != null && pages[pi].role === "cover";
   const isBack = (pi) => pi != null && pages[pi].role === "back-cover";
-  const atStart = (k = pos) => (mode === "spread" ? k === 0 && spreads[0][0] == null && isCover(spreads[0][1]) : k === 0 && isCover(seq[0]));
-  const atEnd = (k = pos) => k === count() - 1 && (mode === "spread" ? spreads[k][1] == null && isBack(spreads[k][0]) : isBack(seq[k]));
+  const atStart = (k = pos) => (mode === "spread" ? k === 0 && spreads[0][0] == null && isCover(spreads[0][1]) : k === 0 && isCover(anchor(0)));
+  const atEnd = (k = pos) => k === count() - 1 && (mode === "spread" ? spreads[k][1] == null && isBack(spreads[k][0]) : isBack(anchor(k)));
 
   function posOf(pi, m = mode) {
     if (m === "spread") return spreadOf[pi];
-    const k = seq.findIndex((x) => x >= pi);
-    return k < 0 ? seq.length - 1 : k;
+    const k = stops.findIndex((st) => spreads[st.s][st.side] >= pi);
+    return k < 0 ? stops.length - 1 : k;
   }
 
-  // The other side of the same leaf of paper.
-  function reverseOf(pi) {
-    if (pi == null) return null;
-    const p = pages[pi];
-    const j = p.side === "R" ? pi + 1 : pi - 1;
-    const q = pages[j];
-    return q && q.side !== p.side && q.scan !== p.scan ? j : null;
-  }
+  const setCam = (c) => book.style.setProperty("--cam", c.toFixed(4));
 
   // Adam's page number for any page: a recto's own, or the recto it backs onto.
   function numberOf(pi) {
@@ -151,9 +156,7 @@
     for (const [d, kind] of ORDER) {
       const k = pos + d;
       if (k < 0 || k >= count()) continue;
-      const near = view(k).filter((pi) => pi != null);
-      if (mode === "single") near.push(...near.map(reverseOf).filter((pi) => pi != null)); // the turning leaf's back
-      for (const pi of near) queue.push(kind === "low" ? low(pi) : src(pi));
+      for (const pi of view(k).filter((pi) => pi != null)) queue.push(kind === "low" ? low(pi) : src(pi));
     }
     queue = queue.filter((s) => !cache.has(s));
     pump();
@@ -194,6 +197,7 @@
     const [l, r] = view();
     setImg(slotL, l);
     setImg(slotR, r);
+    setCam(camOf());
     leaf.hidden = true;
     castL.style.opacity = castR.style.opacity = 0;
     opening.style.removeProperty("--fade");
@@ -201,10 +205,10 @@
     folioL.textContent = l != null ? pages[l].label : "";
     folioR.textContent = r != null ? pages[r].label : "";
 
-    const wasStart = body.classList.contains("at-start");
+    const wasEnds = body.classList.contains("at-start") || body.classList.contains("at-end");
     body.classList.toggle("at-start", atStart());
     body.classList.toggle("at-end", atEnd());
-    if (mode === "single" && wasStart !== atStart()) layout();
+    if (mode === "single" && wasEnds !== (atStart() || atEnd())) layout();
 
     scrub.max = String(count() - 1);
     scrub.value = String(pos);
@@ -216,8 +220,9 @@
     const place = placeAt(pi), date = dateAt(pi);
     where.textContent = atStart() || atEnd() ? "" : [place, date].filter(Boolean).join(", ");
 
-    const slug = pages[pi].slug;
-    if (decodeURIComponent(location.hash.slice(1)) !== slug) history.replaceState(null, "", "#" + slug);
+    // The address names a page in view; a link to either page of a spread is left as it is.
+    const named = pages.findIndex((p) => p.slug === decodeURIComponent(location.hash.slice(1)));
+    if (!shownPages().includes(named)) history.replaceState(null, "", "#" + pages[pi].slug);
 
     showText();
     markEntry();
@@ -225,8 +230,11 @@
     updateLoupe();
   }
 
+  // The pages in view: both of a spread, or the one in the window.
+  const shownPages = (k = pos) => (mode === "single" ? [anchor(k)] : view(k).filter((x) => x != null));
+
   function describe(k = pos) {
-    return view(k).filter((x) => x != null).map((x) => pages[x].label).join(" and ");
+    return shownPages(k).map((x) => pages[x].label).join(" and ");
   }
 
   // Going straight to a page (scrubber, contents, a link): the current page stays
@@ -256,19 +264,19 @@
   // once. Showing the leaf before its pictures were ready let the next page flash
   // through it for a frame on slower devices.
   function planTurn(dir) {
-    const t = { dir, from: pos, to: pos + dir, p: 0, speed: 1, live: false };
-    if (mode === "spread") {
-      const A = spreads[t.from], B = spreads[t.to];
-      if (dir > 0) { t.l = A[0]; t.r = B[1]; t.front = A[1]; t.back = B[0]; t.revealed = castR; t.covered = castL; }
-      else { t.l = B[0]; t.r = A[1]; t.front = B[1]; t.back = A[0]; t.revealed = castL; t.covered = castR; }
-    } else {
-      const cur = seq[t.from], nxt = seq[t.to];
-      t.l = null;
-      if (dir > 0) { t.r = nxt; t.front = cur; t.back = reverseOf(cur); }
-      else { t.r = cur; t.front = nxt; t.back = reverseOf(nxt); }
-      t.revealed = castR;
-      t.covered = null;
+    const t = { dir, from: pos, to: pos + dir, p: 0, speed: 1, live: false, cam0: camOf(pos), cam1: camOf(pos + dir) };
+    const A = view(t.from), B = view(t.to);
+    if (A === B) {
+      // One page at a time, left page to right page of the same spread (or back):
+      // no leaf to turn, the book just slides across under the window.
+      t.slide = true;
+      t.ready = t.swapping = Promise.resolve();
+      return t;
     }
+    // A leaf turns over. One page at a time, the book slides as it turns, so the
+    // window follows the leaf onto the left page, or back off it.
+    if (dir > 0) { t.l = A[0]; t.r = B[1]; t.front = A[1]; t.back = B[0]; t.revealed = castR; t.covered = castL; }
+    else { t.l = B[0]; t.r = A[1]; t.front = B[1]; t.back = A[0]; t.revealed = castL; t.covered = castR; }
     setFace(front, t.front); // the leaf is hidden, so this shows nothing yet
     setFace(back, t.back);
     // Ready when every page in the turn has at least its stand-in, and the sharp
@@ -284,6 +292,14 @@
   const frames = (n) => new Promise((r) => { const f = () => (--n <= 0 ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); });
 
   function commitTurn(t) {
+    if (t.slide) {
+      body.classList.add("turning");
+      loupe.hidden = true;
+      t.live = t.swapped = true;
+      setProgress(t, t.p);
+      if (!t.dragging) showText(t.to);
+      return;
+    }
     // The leaf goes up first, showing the same page as the one beneath it. Only once
     // it has had a couple of frames to be drawn are the pages underneath changed,
     // so a leaf that is slow to appear never leaves a gap where a page should be.
@@ -315,6 +331,8 @@
     t.p = want;
     if (!t.live) return;
     const p = t.swapped ? want : 0; // the leaf stays flat until the pages beneath are swapped
+    setCam(t.cam0 + (t.cam1 - t.cam0) * p);
+    if (t.slide) return;
     const angle = t.dir > 0 ? -180 * p : -180 * (1 - p);
     leaf.style.transform = `rotateY(${angle.toFixed(2)}deg)`;
     leaf.style.setProperty("--lift", Math.sin((Math.PI * -angle) / 180).toFixed(3));
@@ -345,7 +363,7 @@
     return new Promise((resolve) => {
       const p0 = t.p, dist = Math.abs(target - p0);
       if (dist < 0.001) return resolve();
-      const base = (mode === "spread" ? 950 : 700) * Math.max(0.35, dist);
+      const base = (t.slide ? 520 : mode === "spread" ? 950 : 820) * Math.max(0.35, dist);
       let k = 0, last = performance.now();
       const step = (now) => {
         k = Math.min(1, k + ((now - last) * t.speed) / base);
@@ -364,8 +382,11 @@
     }
     if (!canGo(dir)) return;
     if (typingFull()) {
-      // The journal is out of sight: just bring the next page's text in (showText fades it).
-      pos += dir;
+      // The journal is out of sight: just bring the next page's text in (showText
+      // fades it), passing over left-hand pages with nothing written on them.
+      let k = pos + dir;
+      while (mode === "single" && k + dir >= 0 && k + dir < count() && stops[k].side === 0 && !pages[anchor(k)].text) k += dir;
+      pos = k;
       render();
       return;
     }
@@ -418,7 +439,7 @@
       t.dragging = true;
       t.ready.then(() => commitTurn(t)); // follows the finger from then on
     }
-    const span = mode === "spread" ? pw * 1.5 : pw * 0.9;
+    const span = mode === "spread" ? pw * 1.5 : drag.t.slide ? pw : pw * 0.9; // a slide follows the finger exactly
     setProgress(drag.t, Math.max(0, Math.min(1, (-dx * drag.t.dir) / span)));
   });
 
@@ -446,9 +467,13 @@
 
   function tap(x) {
     if (atStart()) return go(1);
-    const r = book.getBoundingClientRect();
-    const split = mode === "spread" ? r.left + r.width / 2 : r.left + r.width * 0.33;
-    go(x < split ? -1 : 1);
+    if (mode === "spread") {
+      const r = book.getBoundingClientRect();
+      return go(x < r.left + r.width / 2 ? -1 : 1);
+    }
+    // One page at a time: the window is the page width in the middle of the stage.
+    const st = stage.getBoundingClientRect();
+    go(x < st.left + st.width / 2 - pw / 2 + pw * 0.33 ? -1 : 1);
   }
 
   /* ---------- keyboard ---------- */
@@ -553,7 +578,9 @@
   // k: the view to show, which during a turn is the one being turned to.
   // fresh: draw it at once, without fading (opening the panel, changing layout).
   function showText(k = pos, fresh = false) {
-    const shown = view(k).filter((pi) => pi != null && (pages[pi].text || pages[pi].side === "R" || mode === "single"));
+    // A spread's typed copy: the pages with writing, and a numbered right-hand page
+    // even if blank. Not the covers' blank insides.
+    const shown = mode === "single" ? shownPages(k) : view(k).filter((pi) => pi != null && (pages[pi].text || (pages[pi].side === "R" && pages[pi].n != null)));
     if (k === pos) srText.textContent = shown.map((pi) => `${pages[pi].label}. ${pages[pi].text.replace(/~~.+?~~|\[|\]|\?/g, "")}`).join(" ");
     if (textPanel.hidden) { typedKey = ""; return; }
     const key = mode + shown.join();
@@ -828,7 +855,9 @@
     }
     let h = mode === "spread" ? hSpread : hSingle;
     let below = folio;
-    if (mode === "single" && body.classList.contains("at-start")) {
+    // One page at a time, the opening title and the closing note go below the cover:
+    // make room for them there.
+    if (mode === "single" && (body.classList.contains("at-start") || body.classList.contains("at-end"))) {
       const room = Math.min(st.height * 0.34, 210);
       h = Math.min(h, availH - room);
       below = room;
@@ -838,7 +867,7 @@
     const root = document.documentElement.style;
     root.setProperty("--pw", pw + "px");
     root.setProperty("--ph", ph + "px");
-    book.style.margin = `0 0 ${below}px`;
+    book.style.marginBottom = `${below}px`; // only the bottom: one page at a time sets the left (CSS)
 
     const need = ph * (devicePixelRatio || 1);
     const h2 = J.heights.find((x) => x >= need * 0.92) ?? J.heights[J.heights.length - 1];
@@ -893,7 +922,14 @@
       spreads = J.spreads;
       spreadOf = [];
       spreads.forEach((row, k) => row.forEach((pi) => { if (pi != null) spreadOf[pi] = k; }));
-      seq = pages.map((p, i) => i).filter((i) => pages[i].writing || pages[i].role === "cover" || pages[i].role === "back-cover");
+      // One page at a time stops on every right-hand page, and on a left-hand page
+      // only when something is written on it (page 97); a blank one is passed over,
+      // its leaf turning away out of the window. (To stop on every left page too,
+      // drop the writing test.)
+      stops = [];
+      spreads.forEach((row, s) => row.forEach((pi, side) => {
+        if (pi != null && (side === 1 || pages[pi].writing)) stops.push({ s, side });
+      }));
       if (J.subtitle) $("#subtitle").textContent = J.subtitle;
       btn.magnify.hidden = !fine.matches;
       buildEntries();
@@ -905,6 +941,9 @@
       body.classList.toggle("at-start", atStart());
       buildTicks();
       layout();
+      // layout() may have settled on the other layout; open on the page the link names.
+      pos = fromHash() ?? pos;
+      body.classList.toggle("at-start", atStart());
       render();
     })
     .catch(() => { where.textContent = "The journal could not be loaded. Reload the page to try again."; body.classList.remove("at-start"); });
