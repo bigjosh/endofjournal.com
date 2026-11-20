@@ -844,7 +844,9 @@
     const availW = st.width - 2 * padX, availH = st.height - 10 - folio;
     const hSpread = Math.min(availH, availW / (2 * a));
     const hSingle = Math.min(availH, availW / a);
-    const next = hSpread >= 0.72 * hSingle && hSpread >= 300 ? "spread" : "single";
+    // Two pages unless that would shrink them much below one page alone. No minimum
+    // height: on a short screen (a phone on its side) one page is no taller than two.
+    const next = hSpread >= 0.72 * hSingle ? "spread" : "single";
     const switched = next !== mode;
     if (switched) {
       const pi = anchor();
@@ -867,6 +869,7 @@
     const root = document.documentElement.style;
     root.setProperty("--pw", pw + "px");
     root.setProperty("--ph", ph + "px");
+    root.setProperty("--half", Math.floor(st.width / 2) + "px"); // binding to the stage's edge
     book.style.marginBottom = `${below}px`; // only the bottom: one page at a time sets the left (CSS)
 
     const need = ph * (devicePixelRatio || 1);
