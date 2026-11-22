@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;1,400&family=Special+Elite&display=swap">
-<link rel="stylesheet" href="style.css?v=22">
+<link rel="stylesheet" href="style.css?v=23">
 </head>
 <body class="at-start">
 <header class="bar">
@@ -56,7 +56,6 @@
       <p class="folio l" aria-hidden="true"></p>
       <p class="folio r" aria-hidden="true"></p>
     </div>
-    <div class="loupe" id="loupe" hidden aria-hidden="true"></div>
   </section>
 
   <aside class="text" id="text" aria-label="Typed text" hidden>
@@ -67,7 +66,7 @@
 </main>
 
 <footer class="rail">
-  <p class="where" id="where" aria-live="polite"></p>
+  <p class="where" id="where"></p>
   <div class="track">
     <button type="button" class="step prev" id="btn-prev" aria-label="Previous page">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
@@ -92,7 +91,10 @@
 </dialog>
 
 <div class="sr-only" id="sr-text"></div>
+<div class="sr-only" id="announce" aria-live="polite"></div>
+<!-- Outside the stage, whose clip-path would cut the lens off at the page edges -->
+<div class="loupe" id="loupe" hidden aria-hidden="true"></div>
 <noscript><p class="noscript">This journal needs JavaScript to turn its pages.</p></noscript>
-<script src="reader.js?v=31" defer></script>
+<script src="reader.js?v=33" defer></script>
 </body>
 </html>

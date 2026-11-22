@@ -29,6 +29,7 @@
   const textPanel = $("#text");
   const textBody = $("#text-body");
   const srText = $("#sr-text");
+  const announce = $("#announce");
   const contents = $("#contents");
   const entriesEl = $("#entries");
   const btn = {
@@ -46,8 +47,16 @@
   let pos = 0;
   let pw = 0, ph = 0, imgH = 1200;
   let turn = null, queued = 0;
+  let relayout = false;     // the layout should change, once the leaf in motion has landed
+  let pendingJump = null;   // a page asked for (contents, scrubber, link) during a turn
+  let endsRoom = false;     // layout() last left room below the book for the title or closing note
+  let refocus = false;      // "Open the journal" or "Back to the first page" had the keyboard
+  let addressTimer = 0;
   let magnifying = false;
   let entries = [];
+
+  // The page the address names, or "" (a garbled address is ignored, not fatal).
+  const hashSlug = () => { try { return decodeURIComponent(location.hash.slice(1)); } catch { return ""; } };
 
   /* ---------- the journal's structure ---------- */
 
@@ -109,14 +118,20 @@
   // background of its slot), so a slow connection gets a soft page, never a gap.
   function setImg(img, pi) {
     const s = src(pi), holder = img.parentElement;
-    if (!s) { img.removeAttribute("src"); img.alt = ""; holder.style.backgroundImage = ""; return; }
+    if (!s) { img.removeAttribute("src"); img.classList.remove("failed"); img.alt = ""; holder.style.backgroundImage = ""; return; }
     if (img.getAttribute("src") !== s) {
       img.src = s;
+      img.classList.remove("failed");
       if (img.complete && img.naturalWidth) holder.style.backgroundImage = "";
       else {
         holder.style.backgroundImage = `url("${low(pi)}")`;
         const sharp = () => { if (img.getAttribute("src") === s) holder.style.backgroundImage = ""; };
-        img.decode().then(sharp, sharp);
+        // If the sharp copy never comes, hide the broken image and keep the soft one.
+        const failed = () => {
+          if (img.getAttribute("src") !== s) return;
+          if (img.complete && !img.naturalWidth) img.classList.add("failed"); else sharp();
+        };
+        img.decode().then(sharp, failed);
       }
     }
     if (!img.closest(".leaf")) img.alt = pages[pi].label + (pages[pi].text ? ", handwritten" : "");
@@ -132,6 +147,7 @@
     const m = s ? `url("${s}")` : "none";
     cast.style.webkitMaskImage = m;
     cast.style.maskImage = m;
+    cast.hidden = !s; // no page there (beside a cover): no shadow on the bare table
   }
 
   // Reading ahead, nearest first and two at a time, at low priority so it never
@@ -205,24 +221,32 @@
     folioL.textContent = l != null ? pages[l].label : "";
     folioR.textContent = r != null ? pages[r].label : "";
 
-    const wasEnds = body.classList.contains("at-start") || body.classList.contains("at-end");
     body.classList.toggle("at-start", atStart());
     body.classList.toggle("at-end", atEnd());
-    if (mode === "single" && wasEnds !== (atStart() || atEnd())) layout();
+    // One page at a time, the covers leave room below for the title or the closing note.
+    if (mode === "single" && endsRoom !== (atStart() || atEnd())) layout();
 
     scrub.max = String(count() - 1);
     scrub.value = String(pos);
     scrub.setAttribute("aria-valuetext", describe());
     btn.prev.disabled = pos === 0;
     btn.next.disabled = pos === count() - 1;
+    keepFocus();
 
     const pi = anchor();
     const place = placeAt(pi), date = dateAt(pi);
     where.textContent = atStart() || atEnd() ? "" : [place, date].filter(Boolean).join(", ");
+    const said = [describe(), place, date].filter(Boolean).join(", ");
+    if (announce.textContent !== said) announce.textContent = said;
 
-    // The address names a page in view; a link to either page of a spread is left as it is.
-    const named = pages.findIndex((p) => p.slug === decodeURIComponent(location.hash.slice(1)));
-    if (!shownPages().includes(named)) history.replaceState(null, "", "#" + pages[pi].slug);
+    // The address names a page in view; a link to either page of a spread is left as it
+    // is. Set a moment later, once: Safari refuses more than 100 changes in 10 seconds.
+    clearTimeout(addressTimer);
+    const named = pages.findIndex((p) => p.slug === hashSlug());
+    if (pendingJump == null && !shownPages().includes(named)) {
+      const slug = pages[pi].slug;
+      addressTimer = setTimeout(() => { try { history.replaceState(null, "", "#" + slug); } catch { /* try again on the next page */ } }, 150);
+    }
 
     showText();
     markEntry();
@@ -233,6 +257,15 @@
   // The pages in view: both of a spread, or the one in the window.
   const shownPages = (k = pos) => (mode === "single" ? [anchor(k)] : view(k).filter((x) => x != null));
 
+  // Keyboard focus never drops to the page when the button it was on goes away: a
+  // step button disabled at either end, or the title's or closing note's button.
+  function keepFocus() {
+    const f = document.activeElement, to = (el) => el.focus({ preventScroll: true });
+    if (refocus && !atStart() && !atEnd()) { refocus = false; to(btn.next); }
+    else if (f === btn.next && btn.next.disabled) to(atEnd() ? btn.restart : btn.prev);
+    else if (f === btn.prev && btn.prev.disabled) to(atStart() ? btn.open : btn.next);
+  }
+
   function describe(k = pos) {
     return shownPages(k).map((x) => pages[x].label).join(" and ");
   }
@@ -240,17 +273,42 @@
   // Going straight to a page (scrubber, contents, a link): the current page stays
   // until the new one has at least its stand-in, so a slow line never shows a gap.
   // While the scrubber is dragged, only the last position asked for is shown.
-  let jumpTo = null;
-  async function jump(k) {
-    if (turn || k < 0 || k >= count()) return;
-    jumpTo = k;
+  // During a turn the page asked for is remembered and gone to once the leaf lands.
+  // settle: wait this long for the position to stop changing before fetching anything.
+  let jumpTicket = 0;
+  async function jump(k, settle = 0) {
+    if (k < 0 || k >= count()) return;
+    const target = anchor(k); // a page, which outlasts a change of layout; k may not
+    if (turn) { pendingJump = target; return; }
+    const ticket = ++jumpTicket;
     if (k === pos) return;
+    if (settle) {
+      await new Promise((r) => setTimeout(r, settle));
+      if (ticket !== jumpTicket) return;
+    }
     if (Math.abs(k - pos) > 2) stopReadAhead(); // nothing queued near here is of use there
     const image = (s) => { const im = new Image(); im.src = s; return im; };
     await decoded(view(k).filter((pi) => pi != null).map((pi) => image(low(pi))), 1500);
-    if (jumpTo !== k || turn || k === pos) return;
+    if (ticket !== jumpTicket) return;
+    if (turn) { pendingJump = target; return; }
+    k = posOf(target);
+    if (k === pos) return;
     pos = k;
     render();
+  }
+
+  // After a leaf lands (or a fade, with reduced motion): apply a change of layout that
+  // came during the turn, draw, then go wherever was asked for meanwhile.
+  function landed() {
+    turn = null;
+    if (relayout) { relayout = false; layout(); }
+    render();
+    if (pendingJump != null) {
+      const target = pendingJump;
+      pendingJump = null;
+      queued = 0;
+      jump(posOf(target));
+    }
   }
 
   /* ---------- turning a leaf ---------- */
@@ -318,8 +376,10 @@
 
     t.opening = (t.dir > 0 && atStart(t.from)) || (t.dir < 0 && atStart(t.to)) ? opening : null;
     t.closing = (t.dir < 0 && atEnd(t.from)) || (t.dir > 0 && atEnd(t.to)) ? closing : null;
-    if (atStart(t.to)) body.classList.add("at-start");
-    if (atEnd(t.to)) body.classList.add("at-end");
+    // Two pages: the title or closing note fades in as the cover comes over. One page
+    // at a time it waits for the landing, when the book makes room for it below.
+    if (mode === "spread" && atStart(t.to)) body.classList.add("at-start");
+    if (mode === "spread" && atEnd(t.to)) body.classList.add("at-end");
     body.classList.add("turning");
     loupe.hidden = true; // back over the new page once it has landed (render)
     t.live = true;
@@ -355,8 +415,7 @@
     await decoded([slotL, slotR]);
     await frames(2);
     body.classList.remove("turning");
-    turn = null;
-    render();
+    landed();
   }
 
   function animate(t, target, ease) {
@@ -396,13 +455,12 @@
       const next = view(pos + dir).filter((pi) => pi != null);
       const image = (s) => { const im = new Image(); im.src = s; return im; };
       await Promise.all([decoded(next.map((pi) => image(low(pi))), 5000), decoded(next.map((pi) => image(src(pi))), 350)]);
-      turn = null;
-      pos += dir;
-      render();
+      pos += dir; // before landed(), which may change the layout and with it what pos means
+      landed();
       book.animate?.([{ opacity: 0.6 }, { opacity: 1 }], { duration: 160, easing: "ease-out" });
       return;
     }
-    if (mode === "single" && atStart() && dir > 0) { body.classList.remove("at-start"); layout(); }
+    leaveCover(dir, false);
     const t = (turn = planTurn(dir));
     await t.ready;
     commitTurn(t);
@@ -410,6 +468,16 @@
     await animate(t, 1, easeInOut);
     await endTurn(t, true);
     if (queued) { const d = queued; queued = 0; go(d); }
+  }
+
+  // One page at a time, the cover sits higher to leave room for the title below it:
+  // leaving it, the book takes its full size before the leaf turns. A stand-in turn
+  // keeps layout() from drawing the cover again meanwhile.
+  function leaveCover(dir, dragging) {
+    if (mode !== "single" || !atStart() || dir < 0) return;
+    turn = { dragging };
+    body.classList.remove("at-start");
+    layout();
   }
 
   /* ---------- pointer: tap to turn, drag to turn by hand ---------- */
@@ -420,6 +488,7 @@
     // While magnifying, a click still turns the page (at the centre of the lens, which
     // is the pointer), but dragging does nothing: the lens follows the pointer instead.
     if (e.button !== 0 || e.target.closest("button, a")) return;
+    if (drag?.t) return; // a leaf is already following one finger; a second changes nothing
     drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, t0: performance.now(), lx: e.clientX, lt: performance.now(), vx: 0, t: null };
   });
 
@@ -434,7 +503,7 @@
       const dir = dx < 0 ? 1 : -1;
       if (!canGo(dir)) return;
       try { book.setPointerCapture(drag.id); } catch { /* the pointer may already be gone */ }
-      if (mode === "single" && atStart() && dir > 0) { body.classList.remove("at-start"); layout(); }
+      leaveCover(dir, true);
       const t = (drag.t = turn = planTurn(dir));
       t.dragging = true;
       t.ready.then(() => commitTurn(t)); // follows the finger from then on
@@ -758,7 +827,7 @@
   /* ---------- contents ---------- */
 
   function words(text, date, dates) {
-    let t = text;
+    let t = text.replace(/~~.*?~~\s*/g, ""); // crossed out: "Nov ~~18~~ 19" is the heading for Nov 19
     const i = t.indexOf(date);
     if (i >= 0) t = t.slice(i + date.length);
     for (const other of dates) {
@@ -813,9 +882,13 @@
     return { k: Math.round(f * (count() - 1)), left: 3 + f * (r.width - 6) };
   }
 
+  let peekTimer = 0;
   function showPeek(k, left) {
     const pi = anchor(k);
-    $("img", peek).src = src(pi, J.heights[0]);
+    // The thumbnail follows a moment behind, so a fast sweep doesn't fetch every page.
+    const img = $("img", peek), s = src(pi, J.heights[0]);
+    clearTimeout(peekTimer);
+    if (img.getAttribute("src") !== s) peekTimer = setTimeout(() => { img.src = s; }, 60);
     const date = dateAt(pi);
     $("span", peek).textContent = pages[pi].label + (date && !atStart(k) ? `, ${date}` : "");
     peek.style.left = `${left}px`;
@@ -828,7 +901,7 @@
     const k = +scrub.value;
     const n = Math.max(1, count() - 1);
     showPeek(k, 3 + (k / n) * (scrub.getBoundingClientRect().width - 6));
-    jump(k);
+    jump(k, 90); // fetch only where the thumb comes to rest, not every page swept past
   });
   scrub.addEventListener("change", () => setTimeout(() => { if (!scrub.matches(":hover")) peek.hidden = true; }, 600));
 
@@ -846,10 +919,19 @@
     const hSingle = Math.min(availH, availW / a);
     // Two pages unless that would shrink them much below one page alone. No minimum
     // height: on a short screen (a phone on its side) one page is no taller than two.
-    const next = hSpread >= 0.72 * hSingle ? "spread" : "single";
+    let next = hSpread >= 0.72 * hSingle ? "spread" : "single";
+    // Not in the middle of a turn, which is planned in the current layout's terms.
+    if (turn && next !== mode) { relayout = true; next = mode; }
     const switched = next !== mode;
     if (switched) {
-      const pi = anchor();
+      // Keep the page the address names, if it is in view; going from two pages to one,
+      // otherwise the right-hand page, unless only the left has writing (page 97).
+      const named = pages.findIndex((p) => p.slug === hashSlug());
+      let pi = shownPages().includes(named) ? named : anchor();
+      if (mode === "spread") {
+        const [l, r] = view();
+        if (pi === r && l != null && r != null && pages[l].text && !pages[r].text) pi = l;
+      }
       mode = next;
       body.classList.toggle("single", mode === "single");
       pos = posOf(pi);
@@ -859,7 +941,8 @@
     let below = folio;
     // One page at a time, the opening title and the closing note go below the cover:
     // make room for them there.
-    if (mode === "single" && (body.classList.contains("at-start") || body.classList.contains("at-end"))) {
+    endsRoom = mode === "single" && (body.classList.contains("at-start") || body.classList.contains("at-end"));
+    if (endsRoom) {
       const room = Math.min(st.height * 0.34, 210);
       h = Math.min(h, availH - room);
       below = room;
@@ -884,8 +967,12 @@
 
   btn.prev.addEventListener("click", () => go(-1));
   btn.next.addEventListener("click", () => go(1));
-  btn.open.addEventListener("click", () => go(1));
-  btn.restart.addEventListener("click", () => { const k = posOf(pages.findIndex((p) => p.n != null)); jump(Math.max(0, k)); });
+  // These buttons go away once used: the keyboard moves on to "Next page".
+  btn.open.addEventListener("click", () => { refocus = document.activeElement === btn.open; go(1); });
+  btn.restart.addEventListener("click", () => {
+    refocus = document.activeElement === btn.restart;
+    jump(Math.max(0, posOf(pages.findIndex((p) => p.n != null))));
+  });
   btn.text.addEventListener("click", () => setText(textPanel.hidden));
   btn.magnify.addEventListener("click", () => setMagnify(!magnifying));
   btn.contents.addEventListener("click", () => {
@@ -902,11 +989,11 @@
   fine.addEventListener?.("change", () => { btn.magnify.hidden = !fine.matches; if (!fine.matches) setMagnify(false); });
 
   function fromHash() {
-    const slug = decodeURIComponent(location.hash.slice(1));
+    const slug = hashSlug();
     const pi = pages.findIndex((p) => p.slug === slug);
     return pi < 0 ? null : posOf(pi);
   }
-  addEventListener("hashchange", () => { const k = fromHash(); if (k != null) jump(k); });
+  addEventListener("hashchange", () => { clearTimeout(addressTimer); const k = fromHash(); if (k != null) jump(k); });
 
   new ResizeObserver(() => layout()).observe(stage);
   addEventListener("resize", () => {

@@ -88,7 +88,7 @@ button {
   transition: opacity .4s;
 }
 
-.at-start .name { opacity: 0; pointer-events: none; }
+.at-start .name { opacity: 0; pointer-events: none; visibility: hidden; transition: opacity .4s, visibility 0s .4s; }
 
 .tools { display: flex; gap: 22px; }
 
@@ -197,6 +197,8 @@ button {
 }
 
 .slot img:not([src]), .face img:not([src]) { visibility: hidden; }
+/* A sharp copy that failed to load: the soft stand-in behind it shows instead. */
+.slot img.failed, .face img.failed { visibility: hidden; }
 
 .cast {
   pointer-events: none;
@@ -376,10 +378,11 @@ button {
   position: relative;
   z-index: 3;
   padding: 0 max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left));
-  transition: opacity .5s;
+  transition: opacity .5s, visibility 0s;
 }
 
-.at-start .rail { opacity: 0; pointer-events: none; }
+/* Hidden on the cover, and out of the keyboard's way too once faded. */
+.at-start .rail { opacity: 0; pointer-events: none; visibility: hidden; transition: opacity .5s, visibility 0s .5s; }
 
 .where {
   margin: 0 0 2px;
@@ -622,7 +625,7 @@ body:not(.typing-full) .sheet { border-radius: 3px; box-shadow: 0 14px 30px rgba
 .sheet-body { cursor: pointer; } /* a click turns the page, as on the journal */
 .typing-full .book { visibility: hidden; }
 .typing-full #btn-magnify { display: none; }
-.typing-full.at-start .rail { opacity: 1; pointer-events: auto; }
+.typing-full.at-start .rail { opacity: 1; pointer-events: auto; visibility: visible; }
 
 /* Contents */
 
