@@ -23,13 +23,15 @@ reaches each place), which the contents and the bottom rail use.
 
 ## Looking at it
 
-`python -m http.server 8417 --directory site`, then open http://localhost:8417.
+`python -m http.server 8417 --directory docs`, then open http://localhost:8417.
 
 ## Publishing
 
-`site/` is the whole website: plain HTML, CSS, JavaScript and images, no build
-service needed. Upload that folder to any static host (Cloudflare Pages, Netlify,
-GitHub Pages) and point endofjournal.com at it.
+`docs/` is the whole website: plain HTML, CSS, JavaScript and images, no build
+service needed. GitHub Pages publishes it from the `main` branch's `/docs` folder,
+so pushing to `main` updates endofjournal.com. `docs/CNAME` names the domain and
+`docs/.nojekyll` tells Pages to serve the files as they are. Any other static host
+can serve the folder unchanged.
 
 `scans/` and `processed/` stay out of git (see `.gitignore`); keep the TIFFs backed up
 somewhere, since everything else can be rebuilt from them.

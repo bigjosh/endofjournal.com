@@ -1,15 +1,17 @@
-"""Build the static reader in site/ from the processed pages and the transcript.
+"""Build the static reader in docs/ from the processed pages and the transcript.
 
     python tools/build_site.py
 
 Reads   processed/manifest.json      reading order and page geometry
         processed/pages/*.webp       2400 px master page images
         content/transcript.json      typed text, page numbers and dates per page
-Writes  site/img/<height>/<page>.webp  the page images at each display size
-        site/journal.json              everything the reader needs, in reading order
+Writes  docs/img/<height>/<page>.webp  the page images at each display size
+        docs/journal.json              everything the reader needs, in reading order
 
-Run process_scans.py first. site/ is then a complete static website: upload the
-folder as it is to any static host.
+Run process_scans.py first. docs/ is then the complete website. GitHub Pages serves
+it straight from main; any other static host can serve the folder as it is. The
+other files in docs/ (HTML, CSS, JS, CNAME, .nojekyll) are written by hand and left
+alone here.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
-SITE = ROOT / "site"
+SITE = ROOT / "docs"  # GitHub Pages can only serve a branch's root or docs/
 HEIGHTS = (600, 1200, 1600)  # smaller copies; the 2400 px master is copied unchanged
 # 600: thumbnails, and the low-res stand-in shown while a sharper page loads.
 # 1600: phones and high-density screens, which need about 1500 px and used to get 2400.
@@ -188,7 +190,7 @@ def main() -> int:
             if f.name not in used:
                 f.unlink()
     version_file.write_text(IMAGES_VERSION + "\n")
-    print(f"{len(pages)} pages in {len(spreads)} spreads -> site/journal.json")
+    print(f"{len(pages)} pages in {len(spreads)} spreads -> docs/journal.json")
     return 0
 
 
